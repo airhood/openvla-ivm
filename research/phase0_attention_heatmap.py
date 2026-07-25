@@ -25,8 +25,13 @@ LIVModule 학습(Phase 1) 이전에 가장 먼저 돌려야 한다.
 """
 
 import argparse
+import os
 import sys
 from pathlib import Path
+
+# MuJoCo/robosuite import보다 먼저 설정해야 함 — 헤드리스(Colab 등, 디스플레이 없음) 환경에서
+# 렌더 백엔드를 못 잡으면 OffScreenRenderEnv가 Python 예외 없이 세그폴트로 죽는다.
+os.environ.setdefault("MUJOCO_GL", "egl")
 
 import numpy as np
 import torch
