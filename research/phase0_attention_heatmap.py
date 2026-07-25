@@ -1,7 +1,7 @@
 """
 research/phase0_attention_heatmap.py
 
-Phase 0: Attention heatmap 검증 (학습 없음) — MODEL.md §6, §8 Phase 0.
+Phase 0: Attention heatmap 검증 (학습 없음) — docs/MODEL.md §6, §8 Phase 0.
 
 사전학습된 OFT 체크포인트로 LIBERO 프레임 하나를 forward하고,
 action→vision attention이 조작 대상 물체에 집중하는 head/layer가

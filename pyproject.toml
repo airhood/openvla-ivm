@@ -49,10 +49,6 @@ dependencies = [
     "torchaudio==2.2.0",
     "transformers @ git+https://github.com/moojink/transformers-openvla-oft.git",  # IMPORTANT: Use this fork for bidirectional attn (for parallel decoding)
     "wandb",
-    "tensorflow==2.15.0",
-    "tensorflow_datasets==4.9.3",
-    "tensorflow_graphics==2021.12.3",
-    "dlimp @ git+https://github.com/moojink/dlimp_openvla",
     "diffusers==0.30.3",
     "imageio",
     "uvicorn",
@@ -67,6 +63,16 @@ dev = [
     "ipython",
     "pre-commit",
     "ruff>=0.2.2",
+]
+# RLDS training-data pipeline (finetune.py's dataloader, OXE mixture). Not needed for
+# inference/eval (predict_action, LIBERO eval, LIV/Phase 0 scripts) — only install this
+# extra when actually loading RLDS datasets. Pinned versions match SETUP.md's Python 3.10 env;
+# on newer Python (e.g. current Colab default) these may not resolve.
+rlds = [
+    "tensorflow==2.15.0",
+    "tensorflow_datasets==4.9.3",
+    "tensorflow_graphics==2021.12.3",
+    "dlimp @ git+https://github.com/moojink/dlimp_openvla",
 ]
 sagemaker = [
     "boto3",
