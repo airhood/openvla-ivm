@@ -802,6 +802,7 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
         NUM_PATCHES,
         NUM_PROMPT_TOKENS,
         noisy_action_projector,
+        output_attentions=False,
     ):
         """Run diffusion-based action prediction"""
         # Clone embedding for reuse in each timestep
@@ -844,6 +845,8 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
             )
 
             # Forward pass through language model
+            # NOTE: output_attentions=True here recomputes attention at every denoising step (~50x cost).
+            # Only needed for diagnostic use (Phase 0); leave False for normal diffusion inference.
             language_model_output = self.language_model(
                 input_ids=None,
                 attention_mask=multimodal_attention_mask,
@@ -852,7 +855,7 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
                 inputs_embeds=multimodal_embeddings,
                 labels=None,
                 use_cache=None,
-                output_attentions=False,
+                output_attentions=output_attentions,
                 output_hidden_states=True,
                 return_dict=True,
             )
@@ -871,8 +874,8 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
 
         curr_noisy_actions = curr_noisy_actions.reshape(NUM_ACTIONS_CHUNK, ACTION_DIM)
 
-        # Return final actions
-        return curr_noisy_actions.float().cpu().detach().numpy(), actions_hidden_states
+        # Return final actions (attentions from the final denoising step only)
+        return curr_noisy_actions.float().cpu().detach().numpy(), actions_hidden_states, language_model_output.attentions
 
     def _regression_or_discrete_prediction(
         self,
@@ -884,6 +887,7 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
         NUM_PATCHES,
         NUM_PROMPT_TOKENS,
         action_head=None,
+        output_attentions=False,
     ):
         """Run L1 regression-based continuous action prediction or discrete action tokens prediction."""
         # Zero out action token embeddings
@@ -904,7 +908,7 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
             inputs_embeds=multimodal_embeddings,
             labels=None,
             use_cache=None,
-            output_attentions=False,
+            output_attentions=output_attentions,
             output_hidden_states=True,
             return_dict=True,
         )
@@ -939,7 +943,7 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
             normalized_actions = self.bin_centers[discretized_actions]
             normalized_actions = normalized_actions.reshape(NUM_ACTIONS_CHUNK, ACTION_DIM)
 
-        return normalized_actions, actions_hidden_states
+        return normalized_actions, actions_hidden_states, language_model_output.attentions
 
     def predict_action(
         self,
@@ -950,6 +954,7 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
         action_head=None,
         noisy_action_projector=None,
         use_film: bool = False,
+        output_attentions: bool = False,
         **kwargs: str,
     ) -> np.ndarray:
         """Predict actions from input sequence, with options for different prediction methods.
@@ -962,6 +967,10 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
             action_head: Optional head for L1 regression or diffusion-based prediction
             noisy_action_projector: Projector for noisy actions in diffusion-based prediction
             use_film: Whether to use FiLM conditioning
+            output_attentions: If True, capture LLM attention (diagnostic use — e.g. Phase 0 LIV
+                heatmap check). Disables SDPA/FlashAttention for this call. Result is stashed on
+                `self.last_attentions` / `self.last_attention_layout` rather than returned, so the
+                (actions, actions_hidden_states) return signature stays unchanged for existing callers.
             **kwargs: Additional arguments including pixel_values and attention_mask
 
         Returns:
@@ -1027,7 +1036,7 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
             )
 
             # Run diffusion-based prediction
-            normalized_actions, actions_hidden_states = self._run_diffusion_prediction(
+            normalized_actions, actions_hidden_states, attentions = self._run_diffusion_prediction(
                 input_embeddings,
                 all_actions_mask,
                 noise,
@@ -1038,10 +1047,11 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
                 NUM_PATCHES,
                 NUM_PROMPT_TOKENS,
                 noisy_action_projector,
+                output_attentions,
             )
         else:
             # Run regression or discrete token-based prediction
-            normalized_actions, actions_hidden_states = self._regression_or_discrete_prediction(
+            normalized_actions, actions_hidden_states, attentions = self._regression_or_discrete_prediction(
                 input_embeddings,
                 all_actions_mask,
                 projected_patch_embeddings,
@@ -1050,10 +1060,22 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
                 NUM_PATCHES,
                 NUM_PROMPT_TOKENS,
                 action_head,
+                output_attentions,
             )
 
         # Unnormalize predicted actions
         actions = self._unnormalize_actions(normalized_actions, unnorm_key)
+
+        # Stash attention + sequence layout for diagnostic callers (e.g. LIV extraction, Phase 0
+        # heatmap check) instead of widening the return tuple and breaking existing callers.
+        if output_attentions:
+            self.last_attentions = attentions
+            self.last_attention_layout = {
+                "vision_start": 1,
+                "vision_end": 1 + self.vision_backbone.get_num_patches() * self.vision_backbone.get_num_images_in_input(),
+                "action_start": NUM_PATCHES + NUM_PROMPT_TOKENS,
+                "action_end": NUM_PATCHES + NUM_PROMPT_TOKENS + ACTION_DIM * NUM_ACTIONS_CHUNK,
+            }
 
         return actions, actions_hidden_states
 
