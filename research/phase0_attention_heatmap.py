@@ -26,6 +26,7 @@ LIVModule 학습(Phase 1) 이전에 가장 먼저 돌려야 한다.
 
 import argparse
 import os
+import pickle
 import sys
 from pathlib import Path
 
@@ -200,6 +201,19 @@ def main():
     parser.add_argument("--num_images_in_input", type=int, default=2)
     parser.add_argument("--center_crop", action="store_true", default=True)
     parser.add_argument("--output_dir", type=str, default="./research/phase0_out")
+    parser.add_argument(
+        "--use_live_env",
+        action="store_true",
+        default=False,
+        help="LIBERO 시뮬레이터를 실제로 띄워서 렌더링 (헤드리스 환경에서 렌더 백엔드 문제 발생 가능). "
+        "기본값은 repo에 이미 포함된 사전 렌더링 관측값(sample_libero_spatial_observation.pkl) 사용.",
+    )
+    parser.add_argument(
+        "--sample_pkl",
+        type=str,
+        default=str(REPO_ROOT / "experiments/robot/libero/sample_libero_spatial_observation.pkl"),
+        help="--use_live_env 미사용 시 로드할 사전 렌더링 관측값 pickle 경로",
+    )
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
@@ -221,21 +235,37 @@ def main():
     check_unnorm_key(cfg, model)
     resize_size = get_image_resize_size(cfg)
 
-    print(f"Setting up LIBERO env: {cfg.task_suite_name} / task {args.task_id}")
-    benchmark_dict = benchmark.get_benchmark_dict()
-    task_suite = benchmark_dict[cfg.task_suite_name]()
-    task = task_suite.get_task(args.task_id)
-    env, task_description = get_libero_env(task, cfg.model_family, resolution=256)
+    if args.use_live_env:
+        # 라이브 시뮬레이터 경로: LIBERO env를 실제로 띄워서 렌더링.
+        # 헤드리스 환경(Colab 등)에서는 MuJoCo 렌더 백엔드(EGL/OSMesa/GLFW) 문제로 죽을 수 있음.
+        print(f"Setting up LIBERO env: {cfg.task_suite_name} / task {args.task_id}")
+        benchmark_dict = benchmark.get_benchmark_dict()
+        task_suite = benchmark_dict[cfg.task_suite_name]()
+        task = task_suite.get_task(args.task_id)
+        env, task_description = get_libero_env(task, cfg.model_family, resolution=256)
 
-    initial_states = task_suite.get_task_init_states(args.task_id)
-    env.reset()
-    obs = env.set_init_state(initial_states[args.episode_idx])
+        initial_states = task_suite.get_task_init_states(args.task_id)
+        env.reset()
+        obs = env.set_init_state(initial_states[args.episode_idx])
 
-    # 물체가 안정화될 때까지 잠깐 대기 (run_libero_eval.py와 동일 패턴)
-    for _ in range(cfg.num_steps_wait):
-        obs, _, _, _ = env.step(get_libero_dummy_action(cfg.model_family))
+        # 물체가 안정화될 때까지 잠깐 대기 (run_libero_eval.py와 동일 패턴)
+        for _ in range(cfg.num_steps_wait):
+            obs, _, _, _ = env.step(get_libero_dummy_action(cfg.model_family))
 
-    observation, raw_img = prepare_observation(obs, resize_size)
+        observation, raw_img = prepare_observation(obs, resize_size)
+    else:
+        # 기본 경로: repo에 포함된 사전 렌더링 관측값 사용 (라이브 시뮬레이터 렌더링 불필요).
+        # Phase 0은 이미지 1장에 대한 attention 패턴만 보면 되므로, 실시간 rollout이 필요 없다.
+        print(f"Loading sample observation from {args.sample_pkl} ...")
+        with open(args.sample_pkl, "rb") as f:
+            sample = pickle.load(f)
+        observation = {
+            "full_image": sample["full_image"],
+            "wrist_image": sample["wrist_image"],
+            "state": sample["state"],
+        }
+        raw_img = sample["full_image"]
+        task_description = sample["task_description"]
 
     print(f"Task: {task_description}")
     print("Running forward pass with output_attentions=True ...")
