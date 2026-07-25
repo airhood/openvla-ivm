@@ -49,6 +49,7 @@ dependencies = [
     "torchaudio==2.2.0",
     "transformers @ git+https://github.com/moojink/transformers-openvla-oft.git",  # IMPORTANT: Use this fork for bidirectional attn (for parallel decoding)
     "wandb",
+    "tensorflow>=2.15,<3",  # used directly by experiments/robot/openvla_utils.py (tf.image resize/crop) — needed for inference too, not just RLDS training
     "diffusers==0.30.3",
     "imageio",
     "uvicorn",
