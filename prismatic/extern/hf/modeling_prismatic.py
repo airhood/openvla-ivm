@@ -955,6 +955,7 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
         noisy_action_projector=None,
         use_film: bool = False,
         output_attentions: bool = False,
+        liv_module=None,
         **kwargs: str,
     ) -> np.ndarray:
         """Predict actions from input sequence, with options for different prediction methods.
@@ -971,11 +972,17 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
                 heatmap check). Disables SDPA/FlashAttention for this call. Result is stashed on
                 `self.last_attentions` / `self.last_attention_layout` rather than returned, so the
                 (actions, actions_hidden_states) return signature stays unchanged for existing callers.
+            liv_module: Optional LIVModule. If provided, `output_attentions` is forced True and the
+                extracted Latent Intent Vector is stashed on `self.last_liv` (same reasoning as
+                `last_attentions` — avoids widening the return signature for existing callers).
             **kwargs: Additional arguments including pixel_values and attention_mask
 
         Returns:
             Tuple of (unnormalized_actions, action_hidden_states)
         """
+        # LIV 추출은 attention이 있어야 하므로, liv_module이 주어지면 output_attentions를 강제한다.
+        output_attentions = output_attentions or (liv_module is not None)
+
         # If the special empty token ('') does not already appear after the colon (':') token in the prompt
         # (after "OUT:" or "ASSISTANT:"), insert it to match the inputs seen at training time
         if not torch.all(input_ids[:, -1] == 29871):
@@ -1010,6 +1017,10 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
 
         # Process vision features
         projected_patch_embeddings = self._process_vision_features(pixel_values, language_embeddings, use_film)
+
+        # LIV은 순수 vision patch embedding만 필요 (proprio/diffusion timestep 토큰 제외) — 아래에서
+        # projected_patch_embeddings가 그것들로 덮어써지기 전에 따로 잡아둔다.
+        pure_vision_features = projected_patch_embeddings
 
         # Add proprioceptive features if provided
         use_proprio = proprio_projector is not None and proprio is not None
@@ -1076,6 +1087,16 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
                 "action_start": NUM_PATCHES + NUM_PROMPT_TOKENS,
                 "action_end": NUM_PATCHES + NUM_PROMPT_TOKENS + ACTION_DIM * NUM_ACTIONS_CHUNK,
             }
+
+            if liv_module is not None:
+                self.last_liv = liv_module(
+                    attentions=self.last_attentions,
+                    vision_features=pure_vision_features,
+                    vision_start=self.last_attention_layout["vision_start"],
+                    vision_end=self.last_attention_layout["vision_end"],
+                    action_start=self.last_attention_layout["action_start"],
+                    action_end=self.last_attention_layout["action_end"],
+                )
 
         return actions, actions_hidden_states
 
