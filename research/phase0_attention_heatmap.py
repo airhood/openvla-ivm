@@ -115,21 +115,29 @@ def get_action_and_attention(cfg, vla, processor, obs, task_label, action_head, 
     return action, attentions, layout
 
 
-def build_raw_heatmaps(attentions, layout, n_extract_layers: int = 4):
+def build_raw_heatmaps(attentions, layout, n_extract_layers: int = 4, image_idx: int = 0):
     """RAW action→vision attention을 (layer, head)별 16x16 heatmap으로 변환.
 
     LIVModule의 AttentionMLP 가중합을 거치지 않은 순수 attention이다 —
     Phase 0의 목적은 "학습 없이도 집중하는 head/layer가 존재하는가"를 보는 것.
 
+    vision token 블록은 이미지당 256개(16x16, SigLIP/DINOv2 고정)씩 이어붙어 있다
+    (num_images_in_input>1이면 [primary 256개, wrist 256개, ...] 순서). image_idx로
+    시각화할 이미지를 선택한다 (기본 0 = primary/full_image, raw_img와 대응).
+
     Returns:
         heatmaps: (n_extract_layers, n_heads, grid, grid) numpy array, 각 (layer,head)별 0~1 정규화
         mean_heatmap: (grid, grid) — 선택된 모든 layer/head 평균
     """
+    PATCHES_PER_IMAGE = 256  # SigLIP/DINOv2 비전 백본 고정값 (16x16 패치)
+    grid = int(round(PATCHES_PER_IMAGE**0.5))  # 16
+
     vs, ve = layout["vision_start"], layout["vision_end"]
     as_, ae = layout["action_start"], layout["action_end"]
     n_vision = ve - vs
-    grid = int(round(n_vision**0.5))
-    assert grid * grid == n_vision, f"vision token 수({n_vision})가 정방형이 아님"
+    assert n_vision % PATCHES_PER_IMAGE == 0, f"vision token 수({n_vision})가 {PATCHES_PER_IMAGE}의 배수가 아님"
+    n_images = n_vision // PATCHES_PER_IMAGE
+    assert 0 <= image_idx < n_images, f"image_idx={image_idx}가 이미지 수({n_images}) 범위를 벗어남"
 
     selected = attentions[-n_extract_layers:]  # L x (1, H, seq, seq)
     sub = torch.stack(
@@ -137,7 +145,8 @@ def build_raw_heatmaps(attentions, layout, n_extract_layers: int = 4):
     )  # (L, 1, H, A, N)
     sub = sub.squeeze(1)  # (L, H, A, N)
     sub = sub.mean(dim=2)  # action mean -> (L, H, N)
-    sub = sub.reshape(sub.shape[0], sub.shape[1], grid, grid)  # (L, H, grid, grid)
+    sub = sub.reshape(sub.shape[0], sub.shape[1], n_images, grid, grid)  # (L, H, n_images, grid, grid)
+    sub = sub[:, :, image_idx]  # 시각화할 이미지 선택 -> (L, H, grid, grid)
 
     heatmaps = sub.float().cpu().numpy()
     # per-(layer,head) min-max 정규화 (시각화용)
