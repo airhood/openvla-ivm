@@ -50,7 +50,25 @@ from experiments.robot.libero.run_libero_eval import (  # noqa: E402
 )
 from experiments.robot.openvla_utils import DEVICE, normalize_proprio, prepare_images_for_vla  # noqa: E402
 from experiments.robot.robot_utils import get_image_resize_size  # noqa: E402
+from huggingface_hub import snapshot_download  # noqa: E402
 from libero.libero import benchmark  # noqa: E402
+
+
+def resolve_local_checkpoint(checkpoint: str) -> str:
+    """HF Hub 체크포인트 ID면 로컬로 다운로드해서 그 경로를 반환한다.
+
+    `AutoModelForVision2Seq.from_pretrained(hub_id, trust_remote_code=True)`는 체크포인트에
+    번들된 원본 modeling_prismatic.py를 그대로 쓰고, 로컬에서 수정한 버전(output_attentions
+    지원 등)은 반영되지 않는다. `get_vla()`의 `check_model_logic_mismatch()`/`update_auto_map()`가
+    로컬 코드를 체크포인트 디렉토리에 동기화해주는 메커니즘인데, 이건 로컬 디렉토리 경로에서만
+    동작하고 Hub ID 문자열로는 동작하지 않는다. 그래서 먼저 로컬로 받아온다.
+    """
+    if os.path.isdir(checkpoint):
+        return checkpoint
+    local_dir = REPO_ROOT / "_checkpoints" / checkpoint.replace("/", "__")
+    print(f"Downloading checkpoint {checkpoint} to {local_dir} (so local modeling code changes take effect)...")
+    snapshot_download(repo_id=checkpoint, local_dir=str(local_dir))
+    return str(local_dir)
 
 
 def get_action_and_attention(cfg, vla, processor, obs, task_label, action_head, proprio_projector, use_film):
@@ -219,8 +237,10 @@ def main():
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    local_checkpoint = resolve_local_checkpoint(args.pretrained_checkpoint)
+
     cfg = GenerateConfig(
-        pretrained_checkpoint=args.pretrained_checkpoint,
+        pretrained_checkpoint=local_checkpoint,
         task_suite_name=args.task_suite_name,
         use_l1_regression=args.use_l1_regression,
         use_proprio=args.use_proprio,

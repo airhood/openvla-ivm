@@ -3,6 +3,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# research/phase0_attention_heatmap.py outputs and downloaded checkpoints
+research/phase0_out/
+_checkpoints/
+
 # C extensions
 *.so
 
