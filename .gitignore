@@ -17,6 +17,10 @@ research/data_generation/scene_utils_out/
 # research/data_generation/generate_dataset.py and build_liv_cache.py outputs
 research/data_generation/dataset_out*/
 research/data_generation/liv_cache_out*/
+research/data_generation/*.zip
+
+# research/train_liv.py output (checkpoints)
+research/train_liv_out*/
 
 # C extensions
 *.so
