@@ -1087,6 +1087,9 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
                 "action_start": NUM_PATCHES + NUM_PROMPT_TOKENS,
                 "action_end": NUM_PATCHES + NUM_PROMPT_TOKENS + ACTION_DIM * NUM_ACTIONS_CHUNK,
             }
+            # LIV 캐싱 파이프라인(research/data_generation/build_liv_cache.py)이 liv_module 없이도
+            # 순수 vision patch embedding을 읽을 수 있도록 last_attentions와 같은 방식으로 stash.
+            self.last_pure_vision_features = pure_vision_features
 
             if liv_module is not None:
                 self.last_liv = liv_module(

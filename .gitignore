@@ -14,6 +14,10 @@ LIBERO/
 research/data_generation/smoke_out/
 research/data_generation/scene_utils_out/
 
+# research/data_generation/generate_dataset.py and build_liv_cache.py outputs
+research/data_generation/dataset_out*/
+research/data_generation/liv_cache_out*/
+
 # C extensions
 *.so
 

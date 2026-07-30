@@ -31,6 +31,38 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+def extract_action_vision_submatrix(
+    attentions: tuple,
+    vision_start: int,
+    vision_end: int,
+    action_start: int,
+    action_end: int,
+    n_extract_layers: int,
+) -> torch.Tensor:
+    """(1) 마지막 L개 레이어의 action→vision 서브행렬을 추출하고 action token mean을 낸다.
+
+    LIVModule.forward()의 첫 단계와 동일한 연산을 독립 함수로 뺀 것 — VLA forward(7B, 비쌈)의
+    출력을 캐싱할 때 이 함수의 결과(Ā, 캐싱 대상)만 저장해두면, 이후 LIVModule 학습 루프에서는
+    raw attentions(레이어 전체, 매우 큼) 없이 forward_from_submatrix()로 바로 이어붙일 수 있다.
+
+    Args:
+        attentions:   LLM output_attentions 결과. tuple[Tensor], len=n_layers,
+                      각 원소 (B, n_heads, seq, seq)
+        vision_start, vision_end: vision token 구간
+        action_start, action_end: action token 구간
+        n_extract_layers: 마지막 몇 개 레이어를 쓸지 (L)
+
+    Returns:
+        Ā: (B, L, H, N) — action token에 대해 평균낸 action→vision attention
+    """
+    selected = attentions[-n_extract_layers:]  # L × (B, H, seq, seq)
+    sub = torch.stack(
+        [a[:, :, action_start:action_end, vision_start:vision_end] for a in selected],
+        dim=1,
+    )  # (B, L, H, A, N)
+    return sub.mean(dim=3)  # (B, L, H, N) — action token mean
+
+
 class AttentionMLP(nn.Module):
     """L×H 공동 가중치를 생성하는 MLP.
 
@@ -163,22 +195,32 @@ class LIVModule(nn.Module):
         Returns:
             ℓ: (B, liv_dim)  — L2 정규화된 Latent Intent Vector
         """
+        sub = extract_action_vision_submatrix(
+            attentions, vision_start, vision_end, action_start, action_end, self.n_extract_layers
+        )  # (B, L, H, N)
+        return self.forward_from_submatrix(sub, vision_features)
+
+    def forward_from_submatrix(self, sub: torch.Tensor, vision_features: torch.Tensor) -> torch.Tensor:
+        """extract_action_vision_submatrix()의 출력(Ā, 캐시에서 로드 가능)부터 이어서 계산.
+
+        forward()의 (2)~(6) 단계와 동일. 캐싱 파이프라인(research/data_generation/build_liv_cache.py)이
+        저장한 Ā + vision_features를 그대로 여기 넣으면, VLA 7B forward 없이 LIVModule만 학습할 수 있다.
+
+        Args:
+            sub:             (B, L, H, N) — extract_action_vision_submatrix() 출력과 동일 shape
+            vision_features: (B, N, D)
+
+        Returns:
+            ℓ: (B, liv_dim) — L2 정규화된 Latent Intent Vector
+        """
         B = vision_features.shape[0]
         G = self.vision_grid    # 16
         P = self.pool_size      # 8
         L = self.n_extract_layers
         H = self.n_heads
-        N = self.n_vision_tokens  # 256
 
-        # ── (1) 마지막 L개 레이어 선택, action→vision 서브행렬 추출, action mean ──
-        selected = attentions[-L:]  # L × (B, H, seq, seq)
-
-        sub = torch.stack(
-            [a[:, :, action_start:action_end, vision_start:vision_end] for a in selected],
-            dim=1,
-        )  # (B, L, H, A, N)
-
-        sub = sub.mean(dim=3)  # (B, L, H, N)   — action token mean
+        assert sub.shape[1] >= L, f"캐시된 레이어 수({sub.shape[1]})가 n_extract_layers({L})보다 적음"
+        sub = sub[:, -L:]  # 캐시가 ablation 대비로 더 많은 레이어를 담고 있을 수 있으므로 마지막 L개만 사용
 
         # ── (2) Spatial pooling for MLP input: N=256 → P² ──
         sub_pool = sub.contiguous().reshape(B * L * H, 1, G, G)  # (B·L·H, 1, 16, 16)
