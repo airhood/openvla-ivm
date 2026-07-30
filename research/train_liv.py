@@ -26,7 +26,9 @@ Hard negative가 하나도 없는 그룹은 학습에서 제외한다(현재 데
 import argparse
 import json
 import math
+import subprocess
 from collections import defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -37,6 +39,13 @@ import sys
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
+
+
+def git_commit_hash() -> str:
+    try:
+        return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, text=True).strip()
+    except Exception:
+        return "unknown"
 
 from prismatic.models.liv import (  # noqa: E402
     LIVContrastiveLoss,
@@ -184,10 +193,26 @@ def main():
     parser.add_argument("--val_frac", type=float, default=0.1)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
+    parser.add_argument(
+        "--log_file",
+        type=str,
+        default=None,
+        help="학습 파라미터+epoch별 loss를 남길 JSONL 경로. 기본: "
+        "research/logs/train_liv_<timestamp>.jsonl (git 추적 대상 — checkpoint와 달리 로그는 커밋함)",
+    )
     args = parser.parse_args()
 
     torch.manual_seed(args.seed)
     device = torch.device(args.device)
+
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
+    log_path = Path(args.log_file) if args.log_file else REPO_ROOT / "research/logs" / f"train_liv_{timestamp}.jsonl"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_f = open(log_path, "w")
+
+    def log(record: dict):
+        log_f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        log_f.flush()
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -199,6 +224,19 @@ def main():
         dataset, [n_train, n_val], generator=torch.Generator().manual_seed(args.seed)
     )
     print(f"dataset: {len(dataset)} groups usable (>=1 hard negative) -> train {n_train} / val {n_val}")
+
+    log(
+        {
+            "type": "run_start",
+            "timestamp": timestamp,
+            "git_commit": git_commit_hash(),
+            "args": vars(args),
+            "cache_manifest": str(Path(args.cache_manifest).resolve()),
+            "n_groups_total": len(dataset),
+            "n_groups_train": n_train,
+            "n_groups_val": n_val,
+        }
+    )
 
     train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True)
     val_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False) if n_val > 0 else None
@@ -229,12 +267,15 @@ def main():
             train_loader, liv_module, decoder, contrastive_loss, state_loss, optimizer, scheduler, device, args.lambda_l2b, args.grad_clip, train=True
         )
         msg = f"[epoch {epoch}] train loss={train_loss:.4f} (L2={train_l2:.4f}, L2b={train_l2b:.4f})"
+        record = {"type": "epoch", "epoch": epoch, "train_loss": train_loss, "train_l2": train_l2, "train_l2b": train_l2b}
         if val_loader is not None:
             val_loss, val_l2, val_l2b = run_epoch(
                 val_loader, liv_module, decoder, contrastive_loss, state_loss, optimizer, scheduler, device, args.lambda_l2b, args.grad_clip, train=False
             )
             msg += f" | val loss={val_loss:.4f} (L2={val_l2:.4f}, L2b={val_l2b:.4f})"
+            record.update({"val_loss": val_loss, "val_l2": val_l2, "val_l2b": val_l2b})
         print(msg)
+        log(record)
 
     ckpt_path = output_dir / "liv_checkpoint.pt"
     torch.save(
@@ -246,6 +287,9 @@ def main():
         ckpt_path,
     )
     print(f"\nSaved checkpoint to {ckpt_path}")
+    log({"type": "run_end", "checkpoint_path": str(ckpt_path.resolve())})
+    log_f.close()
+    print(f"Training log saved to {log_path}")
 
 
 if __name__ == "__main__":

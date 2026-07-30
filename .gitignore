@@ -15,8 +15,11 @@ research/data_generation/smoke_out/
 research/data_generation/scene_utils_out/
 
 # research/data_generation/generate_dataset.py and build_liv_cache.py outputs
+# (일반화된 패턴 — 커스텀 --output_dir 이름을 쓰는 진단 실행도 잡히도록: *_out/, *_diag/)
 research/data_generation/dataset_out*/
 research/data_generation/liv_cache_out*/
+research/data_generation/*_out/
+research/data_generation/*_diag/
 research/data_generation/*.zip
 
 # research/train_liv.py output (checkpoints)
@@ -76,6 +79,8 @@ coverage.xml
 
 # Django stuff:
 *.log
+# research/logs/는 예외 - 실험/검증 실행 기록은 git에 남기기로 함 (연구 근거로 참조 가능해야 함)
+!research/logs/*.log
 local_settings.py
 db.sqlite3
 db.sqlite3-journal

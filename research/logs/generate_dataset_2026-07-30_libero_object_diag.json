@@ -1,0 +1,40 @@
+{
+  "timestamp": "2026-07-30T13-41-18Z",
+  "git_commit": "2b385c45474eb83cabd089512d19330057f74dbd",
+  "args": {
+    "task_suite_name": "libero_object",
+    "num_tasks": 5,
+    "groups_per_task": 3,
+    "output_dir": "research/data_generation/libero_object_diag",
+    "seed": 0,
+    "no_diff_filter": true,
+    "no_domain_randomization": false
+  },
+  "manifest_path": "/media/airhood/로컬 디스크/git/openvla-ivm/research/data_generation/libero_object_diag/manifest.jsonl",
+  "total_rows": 109,
+  "role_counts": {
+    "anchor": 22,
+    "positive": 22,
+    "hard_negative_translate": 22,
+    "hard_negative_rotate": 22,
+    "hard_negative_remove": 21
+  },
+  "task_ids_present": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "log_written_after_run": true,
+  "log_provenance": "이 로그 파일 자체는 실행 시점이 아니라 나중에 썼음(당시 generate_dataset.py에 자동 로깅이 없었음) — 하지만 내용은 실제 command와 실제 manifest.jsonl(수정 없음)에서 직접 계산한 값이라 불확실한 부분 없음.",
+  "note": "libero_spatial의 회전 대칭 물체 문제(rotate hard negative가 계속 필터에 걸림, 0/30)가 다른 task_suite에서도 재현되는지 확인하는 진단 실행. 결론: rotate가 22/22 그룹에서 필터 통과 - 회전 대칭이 아닌 물체(캔/병/상자)에서는 rotate perturbation이 정상 작동함을 확인.",
+  "run_completed": false,
+  "tasks_requested": 5,
+  "tasks_completed": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "incomplete_reason": "Bash 도구의 2분 foreground 타임아웃에 걸려 task 4(ketchup) 실행 전에 프로세스가 종료됨. task 0~3의 데이터는 정상 완료되어 파일에 flush됨(라인별 JSON 파싱 검증 완료, 손상 없음) - 부분적이지만 완전히 유효한 데이터."
+}

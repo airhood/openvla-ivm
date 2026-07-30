@@ -41,7 +41,10 @@ robosuite `DomainRandomizationWrapper`로 텍스처/카메라/조명을 랜덤�
 import argparse
 import json
 import os
+import subprocess
 import sys
+from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 
 os.environ.setdefault("MUJOCO_GL", "egl")
@@ -72,6 +75,13 @@ from scene_utils import (  # noqa: E402
 HARD_NEGATIVE_KINDS = ["translate", "rotate", "remove"]
 # test_scene_utils.py에서 실측/보정한 임계값 — 전체 프레임 평균 픽셀 diff (0~255 스케일).
 MIN_VISUAL_DIFF = 0.3
+
+
+def git_commit_hash() -> str:
+    try:
+        return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, text=True).strip()
+    except Exception:
+        return "unknown"
 
 
 def image_diff(img_a: np.ndarray, img_b: np.ndarray) -> float:
@@ -231,6 +241,7 @@ def main():
     rng = np.random.default_rng(args.seed)
     total_rows = 0
     skipped_groups = 0
+    role_counts = Counter()
 
     with open(manifest_path, "w") as manifest_f:
         for task_id in range(n_tasks):
@@ -273,10 +284,33 @@ def main():
                         row["task_description"] = task_description
                         manifest_f.write(json.dumps(row, ensure_ascii=False) + "\n")
                         total_rows += 1
+                        role_counts[row["role"]] += 1
 
             env.close()
 
     print(f"\nDone. {total_rows} rows written to {manifest_path} ({skipped_groups} group(s) skipped)")
+    print(f"role counts: {dict(role_counts)}")
+
+    log_dir = REPO_ROOT / "research/logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
+    log_path = log_dir / f"generate_dataset_{timestamp}_{args.task_suite_name}.json"
+    with open(log_path, "w") as f:
+        json.dump(
+            {
+                "timestamp": timestamp,
+                "git_commit": git_commit_hash(),
+                "args": vars(args),
+                "manifest_path": str(manifest_path.resolve()),
+                "total_rows": total_rows,
+                "role_counts": dict(role_counts),
+                "skipped_groups": skipped_groups,
+            },
+            f,
+            indent=2,
+            ensure_ascii=False,
+        )
+    print(f"Log saved to {log_path}")
 
 
 if __name__ == "__main__":

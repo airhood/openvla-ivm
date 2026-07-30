@@ -1,0 +1,29 @@
+{
+  "timestamp": "2026-07-30T13-41-18Z",
+  "git_commit": "2b385c45474eb83cabd089512d19330057f74dbd",
+  "args": {
+    "task_suite_name": "libero_spatial",
+    "num_tasks": 3,
+    "groups_per_task": 5,
+    "output_dir": "research/data_generation/dataset_out",
+    "seed": 0,
+    "no_diff_filter": false,
+    "no_domain_randomization": false
+  },
+  "manifest_path": "/media/airhood/로컬 디스크/git/openvla-ivm/research/data_generation/dataset_out/manifest.jsonl",
+  "total_rows": 100,
+  "role_counts": {
+    "anchor": 30,
+    "positive": 30,
+    "hard_negative_translate": 28,
+    "hard_negative_remove": 12
+  },
+  "task_ids_present": [
+    0,
+    1,
+    2
+  ],
+  "log_written_after_run": true,
+  "log_provenance": "이 로그 파일 자체는 실행 시점이 아니라 나중에 썼음(당시 generate_dataset.py에 자동 로깅이 없었음) — 하지만 내용은 실제 command와 실제 manifest.jsonl(수정 없음)에서 직접 계산한 값이라 불확실한 부분 없음.",
+  "note": "캐싱 파이프라인(build_liv_cache.py) 검증용 100-샘플 데이터셋. 실제 학습 규모가 아니라 파이프라인 검증 목적."
+}
