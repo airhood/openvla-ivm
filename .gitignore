@@ -10,8 +10,9 @@ _checkpoints/
 # research/setup_ubuntu_env.sh clones this fresh; not our code to track
 LIBERO/
 
-# research/data_generation/smoke_test.py outputs
+# research/data_generation/smoke_test.py and test_scene_utils.py outputs
 research/data_generation/smoke_out/
+research/data_generation/scene_utils_out/
 
 # C extensions
 *.so
