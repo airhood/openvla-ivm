@@ -17,6 +17,19 @@ Hard negative는 생성 직후 anchor와의 최소 시각적 차이를 기준으
 학습 데이터에 섞이는 것을 방지하기 위함 — docs/MODEL.md §7 "Hard negative의 rotate는 물체 형태에
 따라 약한 신호가 될 수 있음" 항목에서 다루기로 한 대응 (1)의 구현.
 
+Domain Randomization(--no_domain_randomization으로 끔, 기본 켜짐, MODEL.md §7 "선택이 아닌 필수"):
+robosuite `DomainRandomizationWrapper`로 텍스처/카메라/조명을 랜덤화. **그룹당 1회**만 랜덤화하고
+같은 그룹의 anchor/positive/hard-negative는 전부 같은 도메인(배경/조명/카메라)을 공유한다 — 논문
+근거의 "frame-wise"(rollout의 매 프레임 독립 랜덤화, 배경 의존을 끊기 위함)를 문자 그대로 그룹
+내부까지 적용하면, hard negative 최소 시각적 차이 필터와 L2b GT 비교가 "물체가 실제로 움직였는가"가
+아니라 "배경이 우연히 얼마나 바뀌었는가"에 지배당해 필터 자체가 무의미해진다(예: 회전 대칭 물체의
+가짜 hard negative를 걸러내는 로직이 깨짐). 그룹(=하나의 씬 비교 단위) 단위로 랜덤화하면 그룹
+내부 비교는 여전히 "물체/팔 변화만 다른 변수"로 깨끗하게 유지되면서, 데이터셋 전체로 보면 매
+그룹마다 독립적인 배경을 보게 되어 원 취지(배경 의존 학습 방지)는 그대로 달성된다.
+동적 물성 랜덤화(질량/마찰 등, `randomize_dynamics`)는 렌더링에 영향 없고 MODEL.md §7이 명시한
+범위(조명/텍스처/카메라)도 아니므로 사용하지 않는다. Table distractor 랜덤화는 `DomainRandomizationWrapper`
+범위 밖(물체 배치 자체를 바꿔야 함)이라 아직 미구현 — 별도 TODO.
+
 사용:
     python research/data_generation/generate_dataset.py \
         --task_suite_name libero_spatial \
@@ -42,6 +55,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from experiments.robot.libero.libero_utils import get_libero_env, get_libero_image  # noqa: E402
 from libero.libero import benchmark  # noqa: E402
+from robosuite.wrappers import DomainRandomizationWrapper  # noqa: E402
 from scene_utils import (  # noqa: E402
     canonicalize_quaternion_np,
     get_object_pose,
@@ -64,7 +78,44 @@ def image_diff(img_a: np.ndarray, img_b: np.ndarray) -> float:
     return float(np.abs(img_a.astype(np.int32) - img_b.astype(np.int32)).mean())
 
 
-def generate_group(env, obj_name: str, group_id: str, rng: np.random.Generator, output_dir: Path, diff_filter: bool):
+def wrap_domain_randomization(env, seed: int):
+    """텍스처/카메라/조명만 랜덤화(모듈 docstring 참고 — 동적 물성/table distractor는 범위 밖).
+
+    주의 — 이 wrapper의 `.reset()`은 절대 호출하지 말 것: robosuite는 `env.reset()` 시
+    `hard_reset=True`(기본값)라서 매번 완전히 새 `MjSim`을 만들고 옛 sim은 `.free()`로 속성까지
+    지워버리는데(`MjSim.free()`가 `del self.model`), `DomainRandomizationWrapper.reset()`은
+    `save_default_domain()`(옛 sim 참조 사용)을 `update_sim()`(새 sim으로 갱신)보다 먼저 호출해서
+    `AttributeError: 'MjSim' object has no attribute 'model'`이 남. 그래서 reset/set_init_state는
+    항상 raw env에서 직접 호출하고, 이 wrapper는 `.randomize_domain()` 전용으로만 쓴다 — 그때마다
+    `refresh_modders_sim()`으로 현재 sim을 먼저 넣어줘야 한다(매 env.reset()마다 sim이 바뀌므로).
+    """
+    return DomainRandomizationWrapper(
+        env,
+        seed=seed,
+        randomize_color=True,
+        randomize_camera=True,
+        randomize_lighting=True,
+        randomize_dynamics=False,
+        randomize_on_reset=False,
+        randomize_every_n_steps=0,
+    )
+
+
+def refresh_modders_sim(dr_wrapper, env) -> None:
+    """env.reset()으로 sim이 교체된 뒤, wrapper 내부 modder들이 새 sim을 보게 갱신."""
+    for modder in dr_wrapper.modders:
+        modder.update_sim(env.sim)
+
+
+def generate_group(
+    env,
+    obj_name: str,
+    group_id: str,
+    rng: np.random.Generator,
+    output_dir: Path,
+    diff_filter: bool,
+    dr_wrapper=None,
+):
     """물체 하나 기준 anchor+positive+hard-negative 세트를 생성해서 저장.
 
     Returns:
@@ -72,6 +123,12 @@ def generate_group(env, obj_name: str, group_id: str, rng: np.random.Generator, 
     """
     body = object_body_name(obj_name)
     joint = object_joint_name(obj_name)
+
+    if dr_wrapper is not None:
+        # 그룹당 1회만 랜덤화 — 이유는 모듈 docstring "Domain Randomization" 항목 참고
+        # (그룹 내부는 같은 배경 공유해야 diff 필터/L2b GT 비교가 물체 변화만 반영함)
+        refresh_modders_sim(dr_wrapper, env)
+        dr_wrapper.randomize_domain()
 
     obs = refresh_observation(env)
     anchor_pos, anchor_quat = get_object_pose(env, body)
@@ -155,7 +212,13 @@ def main():
         action="store_true",
         help="hard negative 최소 시각적 차이 필터를 끈다 (기본: 켜짐, MIN_VISUAL_DIFF 기준)",
     )
+    parser.add_argument(
+        "--no_domain_randomization",
+        action="store_true",
+        help="텍스처/카메라/조명 domain randomization을 끈다 (기본: 켜짐, MODEL.md §7 참고)",
+    )
     args = parser.parse_args()
+    dr_enabled = not args.no_domain_randomization
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -173,6 +236,7 @@ def main():
         for task_id in range(n_tasks):
             task = task_suite.get_task(task_id)
             env, task_description = get_libero_env(task, "openvla", resolution=256)
+            dr_wrapper = wrap_domain_randomization(env, seed=args.seed + task_id) if dr_enabled else None
             initial_states = task_suite.get_task_init_states(task_id)
             n_states = min(args.groups_per_task, len(initial_states))
 
@@ -190,7 +254,13 @@ def main():
                     group_id = f"{args.task_suite_name}_t{task_id}_s{state_idx}_{obj_name}"
                     try:
                         rows = generate_group(
-                            env, obj_name, group_id, rng, output_dir, diff_filter=not args.no_diff_filter
+                            env,
+                            obj_name,
+                            group_id,
+                            rng,
+                            output_dir,
+                            diff_filter=not args.no_diff_filter,
+                            dr_wrapper=dr_wrapper,
                         )
                     except Exception as e:  # noqa: BLE001 — 물체별 실패가 전체 배치를 막지 않도록
                         print(f"  [skip] {group_id}: {e}")
