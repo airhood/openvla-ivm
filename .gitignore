@@ -7,6 +7,12 @@ __pycache__/
 research/phase0_out/
 _checkpoints/
 
+# research/setup_ubuntu_env.sh clones this fresh; not our code to track
+LIBERO/
+
+# research/data_generation/smoke_test.py outputs
+research/data_generation/smoke_out/
+
 # C extensions
 *.so
 

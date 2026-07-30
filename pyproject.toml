@@ -41,7 +41,7 @@ dependencies = [
     "peft==0.11.1",
     "protobuf",
     "rich",
-    "sentencepiece==0.1.99",
+    "sentencepiece>=0.1.99",  # 0.1.99엔 cp312용 사전빌드 wheel이 없어 소스 빌드가 필요했음(cmake 등). 최신 버전 허용으로 완화
     "timm==0.9.10",
     "tokenizers==0.19.1",
     "torch==2.2.0",

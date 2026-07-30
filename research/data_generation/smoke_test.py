@@ -95,7 +95,11 @@ def main():
     env.sim.data.qpos[idx] = new_qpos
     env.sim.forward()  # 물리 step 없이 상태만 반영
 
-    obs_after = env._get_observations()
+    # OffScreenRenderEnv(ControlEnv 래퍼)는 _get_observations()를 직접 노출하지 않음.
+    # regenerate_obs_from_state()가 set_state -> sim.forward() -> observables 갱신 ->
+    # _get_observations()를 캡슐화한 공식 경로라 이걸 통해 새 관측값을 받는다
+    # (env.sim.data.qpos를 이미 직접 수정해뒀으므로 get_sim_state()로 그 상태를 그대로 스냅샷).
+    obs_after = env.regenerate_obs_from_state(env.get_sim_state())
     img_after = get_libero_image(obs_after)
     PILImage.fromarray(img_after).save(output_dir / "02_after_arm_change.png")
     print(f"저장: {output_dir / '02_after_arm_change.png'} (팔 관절각 변경 후)")
