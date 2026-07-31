@@ -70,6 +70,7 @@ from libero.libero import benchmark  # noqa: E402
 from robosuite.wrappers import DomainRandomizationWrapper  # noqa: E402
 from scene_utils import (  # noqa: E402
     canonicalize_quaternion_np,
+    enable_shadows,
     get_object_pose,
     get_robot_joint_positions,
     object_body_name,
@@ -275,6 +276,7 @@ def main():
 
             for state_idx in range(n_states):
                 env.reset()
+                enable_shadows(env)  # env.reset()이 매번 새 모델을 만들어 castshadow가 초기화됨
                 env.set_init_state(initial_states[state_idx])
                 obj_names = list(env.obj_of_interest)
                 if not obj_names:

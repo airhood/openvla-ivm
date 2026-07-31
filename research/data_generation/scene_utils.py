@@ -88,6 +88,18 @@ def sample_random_arm_pose(env, scale: float = 0.3, rng: np.random.Generator = N
     return current + offset
 
 
+def enable_shadows(env, offsamples: int = 8) -> None:
+    """LIBERO/robosuite 기본 arena XML(table_arena.xml 등)이 조명에 castshadow="false"를
+    박아놔서 렌더링에 그림자가 아예 안 생기는 문제를 고친다 (2026-07-31 실측 확인 — shadowsize는
+    이미 기본 4096이라 무관, 진짜 원인은 이거였음). offsamples는 안티앨리어싱 샘플 수(기본 4).
+
+    주의: env.reset()은 hard_reset=True라 매번 완전히 새 MjModel을 만들어서 castshadow가 다시
+    XML 기본값(꺼짐)으로 돌아간다 — **env.reset() 직후마다 다시 호출해야 함**.
+    """
+    env.sim.model.light_castshadow[:] = 1
+    env.sim.model.vis.quality.offsamples = offsamples
+
+
 def refresh_observation(env):
     """qpos를 직접 수정한 뒤 새 관측값(렌더링 포함)을 받는다.
 

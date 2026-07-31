@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-07-31T12-48-18Z",
+  "git_commit": "efbf68e9494e9872bf4674601c3a816627b3c6d3",
+  "args": {
+    "task_suite_name": "libero_spatial",
+    "num_tasks": 1,
+    "groups_per_task": 1,
+    "seed": 0,
+    "output_dir": "shadow_integration_test",
+    "no_diff_filter": false,
+    "no_domain_randomization": false,
+    "perturbation_tier": "gross"
+  },
+  "manifest_path": "/media/airhood/로컬 디스크/git/openvla-ivm/research/data_generation/shadow_integration_test/manifest.jsonl",
+  "total_rows": 7,
+  "role_counts": {
+    "anchor": 2,
+    "positive": 2,
+    "hard_negative_translate": 2,
+    "hard_negative_remove": 1
+  },
+  "skipped_groups": 0
+}
