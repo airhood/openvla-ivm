@@ -1,0 +1,58 @@
+{
+  "timestamp": "2026-07-31T11-31-33Z",
+  "git_commit": "57d60a8adf4fe79d8a5586f72d70a12920b19b9e",
+  "checkpoint": "/media/airhood/로컬 디스크/git/openvla-ivm/research/train_liv_out/liv_checkpoint.pt",
+  "checkpoint_train_args": {
+    "cache_manifest": [
+      "research/data_generation/liv_cache_out_spatial/cache_manifest.jsonl",
+      "research/data_generation/liv_cache_out_object/cache_manifest.jsonl"
+    ],
+    "output_dir": "research/train_liv_out",
+    "epochs": 30,
+    "batch_size": 16,
+    "lr": 0.001,
+    "weight_decay": 0.01,
+    "warmup_steps": 20,
+    "grad_clip": 1.0,
+    "temperature": 0.07,
+    "lambda_l2b": 1.0,
+    "n_extract_layers": 4,
+    "pool_size": 8,
+    "liv_dim": 128,
+    "max_hard_negatives": 3,
+    "val_frac": 0.1,
+    "seed": 0,
+    "device": "cuda",
+    "log_file": null
+  },
+  "train": {
+    "n_samples": 669,
+    "position_error_m": {
+      "mean": 0.14935970733496284,
+      "median": 0.13596777617931366,
+      "std": 0.07553690492730367,
+      "max": 0.38793137669563293
+    },
+    "angle_error_deg": {
+      "mean": 19.69742420195464,
+      "median": 8.216172218322754,
+      "std": 20.45250837433037,
+      "max": 89.68409729003906
+    }
+  },
+  "val": {
+    "n_samples": 74,
+    "position_error_m": {
+      "mean": 0.18524139450007193,
+      "median": 0.1717243492603302,
+      "std": 0.09682369792639062,
+      "max": 0.45903459191322327
+    },
+    "angle_error_deg": {
+      "mean": 25.48173868615885,
+      "median": 11.322639465332031,
+      "std": 26.446752939473726,
+      "max": 90.39878845214844
+    }
+  }
+}
