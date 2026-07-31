@@ -18,7 +18,8 @@ Hard negative가 하나도 없는 그룹은 학습에서 제외한다(현재 데
 
 사용:
     python research/train_liv.py \
-        --cache_manifest research/data_generation/liv_cache_out/cache_manifest.jsonl \
+        --cache_manifest research/data_generation/liv_cache_out_spatial/cache_manifest.jsonl \
+                          research/data_generation/liv_cache_out_object/cache_manifest.jsonl \
         --output_dir research/train_liv_out \
         --epochs 20
 """
@@ -61,18 +62,27 @@ N_VISION_TOKENS = 256
 
 
 class LIVCacheDataset(Dataset):
-    """cache_manifest.jsonl을 그룹(group_id)별로 묶어서 anchor/positive/hard_negative 세트로 노출."""
+    """하나 이상의 cache_manifest.jsonl을 그룹(group_id)별로 묶어서 anchor/positive/hard_negative 세트로 노출.
 
-    def __init__(self, cache_manifest_path: str, max_hard_negatives: int = 3, seed: int = 0):
-        cache_manifest_path = Path(cache_manifest_path)
-        self.cache_dir = cache_manifest_path.parent
+    여러 task_suite의 캐시(각각 별도 디렉토리)를 섞어서 학습할 수 있도록 cache_manifest_paths는
+    리스트를 받는다 — group_id는 task_suite_name이 접두어로 붙어있어(예: "libero_spatial_t0_...")
+    서로 다른 suite 간 충돌 없음.
+    """
+
+    def __init__(self, cache_manifest_paths, max_hard_negatives: int = 3, seed: int = 0):
+        if isinstance(cache_manifest_paths, (str, Path)):
+            cache_manifest_paths = [cache_manifest_paths]
         self.max_hard_negatives = max_hard_negatives
         self.rng = np.random.default_rng(seed)
 
-        rows = [json.loads(line) for line in cache_manifest_path.read_text().splitlines() if line.strip()]
         groups = defaultdict(dict)
-        for row in rows:
-            groups[row["group_id"]][row["role"]] = row
+        for manifest_path in cache_manifest_paths:
+            manifest_path = Path(manifest_path)
+            cache_dir = manifest_path.parent
+            rows = [json.loads(line) for line in manifest_path.read_text().splitlines() if line.strip()]
+            for row in rows:
+                row["_cache_dir"] = cache_dir
+                groups[row["group_id"]][row["role"]] = row
 
         self.samples = []
         for group_id, roles in groups.items():
@@ -87,7 +97,7 @@ class LIVCacheDataset(Dataset):
         return len(self.samples)
 
     def _load(self, row):
-        d = np.load(self.cache_dir / row["cache_path"])
+        d = np.load(row["_cache_dir"] / row["cache_path"])
         return d["submatrix"].astype(np.float32), d["vision_features"].astype(np.float32)
 
     def __getitem__(self, idx):
@@ -176,7 +186,13 @@ def run_epoch(loader, liv_module, decoder, contrastive_loss, state_loss, optimiz
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--cache_manifest", type=str, required=True)
+    parser.add_argument(
+        "--cache_manifest",
+        type=str,
+        nargs="+",
+        required=True,
+        help="cache_manifest.jsonl 경로 1개 이상 (여러 task_suite 캐시를 섞어서 학습 가능)",
+    )
     parser.add_argument("--output_dir", type=str, default=str(REPO_ROOT / "research/train_liv_out"))
     parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--batch_size", type=int, default=8)
@@ -231,7 +247,7 @@ def main():
             "timestamp": timestamp,
             "git_commit": git_commit_hash(),
             "args": vars(args),
-            "cache_manifest": str(Path(args.cache_manifest).resolve()),
+            "cache_manifest": [str(Path(p).resolve()) for p in args.cache_manifest],
             "n_groups_total": len(dataset),
             "n_groups_train": n_train,
             "n_groups_val": n_val,

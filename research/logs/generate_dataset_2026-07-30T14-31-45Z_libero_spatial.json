@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-07-30T14-31-45Z",
+  "git_commit": "fa508216dd28e909673a8f1f36fe30effeefefe9",
+  "args": {
+    "task_suite_name": "libero_spatial",
+    "num_tasks": null,
+    "groups_per_task": 20,
+    "seed": 0,
+    "output_dir": "dataset_out_spatial",
+    "no_diff_filter": false,
+    "no_domain_randomization": false
+  },
+  "manifest_path": "/media/airhood/로컬 디스크/git/openvla-ivm/research/data_generation/dataset_out_spatial/manifest.jsonl",
+  "total_rows": 1435,
+  "role_counts": {
+    "anchor": 400,
+    "positive": 400,
+    "hard_negative_translate": 388,
+    "hard_negative_remove": 243,
+    "hard_negative_rotate": 4
+  },
+  "skipped_groups": 0
+}

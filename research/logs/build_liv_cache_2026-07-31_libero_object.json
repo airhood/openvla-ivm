@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-07-31T10-30-20Z",
+  "git_commit": "fa508216dd28e909673a8f1f36fe30effeefefe9",
+  "source_dataset_manifest": "/media/airhood/로컬 디스크/git/openvla-ivm/research/data_generation/dataset_out_object/manifest.jsonl",
+  "cache_manifest": "/media/airhood/로컬 디스크/git/openvla-ivm/research/data_generation/liv_cache_out_object/cache_manifest.jsonl",
+  "pretrained_checkpoint": "moojink/openvla-7b-oft-finetuned-libero-object",
+  "n_extract_layers_cached": 8,
+  "n_cached": 1654,
+  "submatrix_shape": [
+    8,
+    32,
+    256
+  ],
+  "vision_features_shape": [
+    256,
+    4096
+  ],
+  "nan_or_inf_samples": 0,
+  "log_written_after_run": true,
+  "log_provenance": "Colab에서 build_liv_cache.py 실행 후 다운로드된 zip을 로컬에서 검증하고 남긴 로그. cache_manifest.jsonl 행 수가 대응하는 dataset manifest 행 수와 정확히 일치함을 확인."
+}
