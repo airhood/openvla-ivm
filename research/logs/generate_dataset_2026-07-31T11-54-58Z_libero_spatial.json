@@ -1,0 +1,24 @@
+{
+  "timestamp": "2026-07-31T11-54-58Z",
+  "git_commit": "e3063ba18a83c73e9f75e914280bf2e13f38759a",
+  "args": {
+    "task_suite_name": "libero_spatial",
+    "num_tasks": 1,
+    "groups_per_task": 2,
+    "seed": 0,
+    "output_dir": "fine_tier_smoketest",
+    "no_diff_filter": true,
+    "no_domain_randomization": false,
+    "perturbation_tier": "fine"
+  },
+  "manifest_path": "/media/airhood/로컬 디스크/git/openvla-ivm/research/data_generation/fine_tier_smoketest/manifest.jsonl",
+  "total_rows": 20,
+  "role_counts": {
+    "anchor": 4,
+    "positive": 4,
+    "hard_negative_translate": 4,
+    "hard_negative_rotate": 4,
+    "hard_negative_remove": 4
+  },
+  "skipped_groups": 0
+}

@@ -110,10 +110,28 @@ def canonicalize_quaternion_np(quat: np.ndarray) -> np.ndarray:
     return quat * sign
 
 
+# docs/MODEL.md §7 "난이도 커리큘럼(Phase 2)" Gross/Medium/Fine 단계에 대응.
+# remove는 "부분적으로 제거"가 물리적으로 말이 안 돼서 tier와 무관하게 항상 gross로 취급(§7 표에도
+# "Gross: 물체 제거/교체"로만 등장, Fine에는 없음).
+PERTURBATION_TIERS = {
+    "gross": {  # 기존 기본값(2026-07-30 설계) — Medium 단계에 해당(§7 표 "큰 위치 이동, 90도 회전")
+        "translate_range": (0.08, 0.15),
+        "rotate_center_deg": 90.0,
+        "rotate_jitter_deg": 11.5,  # ±0.2rad
+    },
+    "fine": {  # 2026-07-31 추가 — §7 표 "Fine: 작은 이동, 미세 회전" 민감도 측정용
+        "translate_range": (0.01, 0.05),
+        "rotate_center_deg": 15.0,
+        "rotate_jitter_deg": 5.0,
+    },
+}
+
+
 def sample_object_perturbation(
     position: np.ndarray,
     quaternion: np.ndarray,
     kind: str,
+    tier: str = "gross",
     rng: np.random.Generator = None,
 ):
     """hard negative용 물체 교란. kind에 따라 이동/회전/제거를 적용한다.
@@ -122,6 +140,7 @@ def sample_object_perturbation(
         position: (3,) 원래 위치
         quaternion: (4,) 원래 자세 (w,x,y,z)
         kind: "translate" | "rotate" | "remove"
+        tier: "gross" | "fine" — 교란 강도 (PERTURBATION_TIERS 참고, remove는 무관)
         rng: numpy Generator
 
     Returns:
@@ -131,26 +150,30 @@ def sample_object_perturbation(
     rng = rng or np.random.default_rng()
     position = np.asarray(position, dtype=float).copy()
     quaternion = np.asarray(quaternion, dtype=float).copy()
+    params = PERTURBATION_TIERS[tier]
 
     if kind == "translate":
-        # 테이블 평면(x,y) 위에서 확실히 눈에 띄는 정도로 이동. z(높이)는 유지.
-        offset = rng.uniform(low=-0.15, high=0.15, size=2)
+        # 테이블 평면(x,y) 위에서 이동. z(높이)는 유지.
+        low, high = params["translate_range"]
+        offset = rng.uniform(low=-high, high=high, size=2)
         # 원점 근처로 이동하는 것을 피하기 위해 최소 이동량 보장
-        offset = np.sign(offset) * np.clip(np.abs(offset), 0.08, None)
+        offset = np.sign(offset) * np.clip(np.abs(offset), low, None)
         position[0] += offset[0]
         position[1] += offset[1]
         return position, quaternion
 
     if kind == "rotate":
-        # z축 기준 큰 회전 (예: 90도 근방)
-        angle = rng.choice([-1, 1]) * (np.pi / 2 + rng.uniform(-0.2, 0.2))
+        # z축 기준 회전 (tier별 중심각 ± jitter)
+        center = np.radians(params["rotate_center_deg"])
+        jitter = np.radians(params["rotate_jitter_deg"])
+        angle = rng.choice([-1, 1]) * (center + rng.uniform(-jitter, jitter))
         half = angle / 2
         rot_quat = np.array([np.cos(half), 0.0, 0.0, np.sin(half)])  # z축 회전, (w,x,y,z)
         new_quat = quaternion_multiply(rot_quat, quaternion)
         return position, new_quat
 
     if kind == "remove":
-        # 카메라 시야 밖 멀리(테이블 아래)로 순간이동 -> "물체가 사라진" 상태
+        # 카메라 시야 밖 멀리(테이블 아래)로 순간이동 -> "물체가 사라진" 상태 (tier 무관)
         position = position.copy()
         position[2] -= 1.0
         return position, quaternion

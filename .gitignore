@@ -3,6 +3,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# 개발 문서 — 절대 git에 안 올림(표준 지시). 공유 NTFS 파티션으로만 이동, git 히스토리엔 안 남김.
+docs/MODEL.md
+docs/PROGRESS.md
+
 # research/phase0_attention_heatmap.py outputs and downloaded checkpoints
 research/phase0_out/
 _checkpoints/

@@ -30,6 +30,15 @@ robosuite `DomainRandomizationWrapper`로 텍스처/카메라/조명을 랜덤�
 범위(조명/텍스처/카메라)도 아니므로 사용하지 않는다. Table distractor 랜덤화는 `DomainRandomizationWrapper`
 범위 밖(물체 배치 자체를 바꿔야 함)이라 아직 미구현 — 별도 TODO.
 
+Perturbation tier(--perturbation_tier, 기본 gross): 2026-07-31 추가. `eval_liv_separation.py`로
+확인해보니 기존(gross) hard negative는 전부 변위가 커서(translate≥8cm, rotate≈90도) LIV 임베딩이
+"상태가 바뀌었는지"를 구분하는 능력이 어느 변위부터 무너지는지 관측을 못 함 — 가장 작은 변위
+구간에서도 이미 AUC 0.99+였음. fine tier(translate 1~5cm, rotate ~15도)로 그 경계를 찾기 위한
+옵션. **fine 사용 시 --no_diff_filter를 같이 켜는 걸 권장** — MIN_VISUAL_DIFF 필터가 gross 기준
+(회전 대칭 물체의 가짜 negative를 거르기 위함)이라 fine의 진짜-작지만-실재하는 변화까지 같이
+걸러버림. gross와 fine을 나중에 합쳐 쓸 걸 대비해 group_id에 tier suffix를 붙임(gross는 하위호환을
+위해 접미어 없음, fine만 "_fine").
+
 사용:
     python research/data_generation/generate_dataset.py \
         --task_suite_name libero_spatial \
@@ -125,6 +134,7 @@ def generate_group(
     output_dir: Path,
     diff_filter: bool,
     dr_wrapper=None,
+    perturbation_tier: str = "gross",
 ):
     """물체 하나 기준 anchor+positive+hard-negative 세트를 생성해서 저장.
 
@@ -181,7 +191,7 @@ def generate_group(
 
     # === hard negatives: 팔 고정(anchor와 동일), 물체만 교란 ===
     for kind in HARD_NEGATIVE_KINDS:
-        new_pos, new_quat = sample_object_perturbation(anchor_pos, anchor_quat, kind, rng=rng)
+        new_pos, new_quat = sample_object_perturbation(anchor_pos, anchor_quat, kind, tier=perturbation_tier, rng=rng)
         set_object_pose(env, joint, new_pos, new_quat)
         obs_neg = refresh_observation(env)
         img_neg = get_libero_image(obs_neg)
@@ -203,6 +213,7 @@ def generate_group(
                 "object_pos": new_pos.tolist(),
                 "object_quat": canonicalize_quaternion_np(new_quat).tolist(),
                 "visual_diff_from_anchor": diff,
+                "perturbation_tier": perturbation_tier,
             }
         )
         set_object_pose(env, joint, anchor_pos, anchor_quat)  # 다음 kind를 위해 복구
@@ -226,6 +237,15 @@ def main():
         "--no_domain_randomization",
         action="store_true",
         help="텍스처/카메라/조명 domain randomization을 끈다 (기본: 켜짐, MODEL.md §7 참고)",
+    )
+    parser.add_argument(
+        "--perturbation_tier",
+        type=str,
+        default="gross",
+        choices=["gross", "fine"],
+        help="hard negative 교란 강도 (scene_utils.PERTURBATION_TIERS 참고). "
+        "gross=기존 기본값(큰 이동/90도 회전), fine=작은 이동/미세 회전 — MODEL.md §7 난이도 커리큘럼 대응. "
+        "remove는 tier와 무관. fine으로 생성할 땐 diff_filter가 작은 변화를 지워버리므로 --no_diff_filter도 같이 켜는 걸 권장",
     )
     args = parser.parse_args()
     dr_enabled = not args.no_domain_randomization
@@ -262,7 +282,11 @@ def main():
                     continue
 
                 for obj_name in obj_names:
-                    group_id = f"{args.task_suite_name}_t{task_id}_s{state_idx}_{obj_name}"
+                    # gross(기본값)는 기존 group_id 그대로 유지(이미 생성된 캐시와의 호환성).
+                    # fine은 접미어를 붙여 별도 그룹으로 구분 — 같은 (task,state,obj)라도 gross/fine을
+                    # 나중에 한 LIVCacheDataset에 합칠 때 group_id 충돌로 서로 덮어쓰지 않게 하기 위함.
+                    tier_suffix = "" if args.perturbation_tier == "gross" else f"_{args.perturbation_tier}"
+                    group_id = f"{args.task_suite_name}_t{task_id}_s{state_idx}_{obj_name}{tier_suffix}"
                     try:
                         rows = generate_group(
                             env,
@@ -272,6 +296,7 @@ def main():
                             output_dir,
                             diff_filter=not args.no_diff_filter,
                             dr_wrapper=dr_wrapper,
+                            perturbation_tier=args.perturbation_tier,
                         )
                     except Exception as e:  # noqa: BLE001 — 물체별 실패가 전체 배치를 막지 않도록
                         print(f"  [skip] {group_id}: {e}")
