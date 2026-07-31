@@ -12,6 +12,10 @@ eval_liv.py가 확인한 건 "LIV 임베딩에서 위치를 얼마나 정밀하�
 2. hard negative의 실제 물리적 변위량(GT position/quaternion 차이)과 cosine similarity의 상관관계.
    "많이 움직인 물체일수록 임베딩도 많이 달라지는가"를 직접 확인 — L2(contrastive)가 원하는
    바로 그 성질이라, L2b probe보다 이 architecture의 실제 목적에 더 직결된 지표.
+3. 변위량을 구간(bin)으로 나눠서, 구간별로 positive 분포 대비 AUC + Wasserstein distance를 본다.
+   변위가 0에 가까운 hard negative는 사실상 positive와 구분이 안 되는 게 정상(같은 상태나 다름
+   없으므로) — 그 "구분이 무너지기 시작하는 변위량"이 곧 지금 모델의 실질적 민감도(해상도)다.
+   AUC가 구간별로 얼마나 완만하게/급격하게 0.5(랜덤)로 떨어지는지가 "divergence 감소율".
 
 사용:
     python research/eval_liv_separation.py --checkpoint research/train_liv_out/liv_checkpoint.pt
@@ -26,7 +30,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from scipy.stats import rankdata, spearmanr
+from scipy.stats import rankdata, spearmanr, wasserstein_distance
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
@@ -150,6 +154,39 @@ def main():
     corr, pval = spearmanr(disp, sim)
     print(f"물리적 변위 vs cosine similarity: Spearman corr={corr:.3f} (p={pval:.2e}) — 음수면 '많이 움직일수록 유사도가 낮아짐'(원하는 방향)")
     results["displacement_vs_similarity_spearman"] = {"n": len(disp), "corr": float(corr), "pvalue": float(pval)}
+
+    # === 변위량 구간별 AUC/divergence — "구분이 무너지는 지점"(민감도 해상도) 확인 ===
+    n_bins = 8
+    quantile_edges = np.quantile(disp, np.linspace(0, 1, n_bins + 1))
+    quantile_edges = np.unique(quantile_edges)  # 값이 중복되면(예: remove가 다 -1.0 근처) bin이 줄어듦
+    bin_idx = np.digitize(disp, quantile_edges[1:-1], right=True)
+
+    print("\n변위량 구간별 positive 대비 분리도 (구간이 작을수록/가까울수록 AUC가 0.5에 가까워야 정상):")
+    bin_results = []
+    for b in range(len(quantile_edges) - 1):
+        mask = bin_idx == b
+        if mask.sum() < 3:
+            continue
+        bin_sims = sim[mask]
+        bin_disp = disp[mask]
+        auc = auc_separation(pos_sims, bin_sims)
+        wdist = float(wasserstein_distance(pos_sims, bin_sims))
+        print(
+            f"  변위 [{bin_disp.min():.3f}, {bin_disp.max():.3f}] (n={mask.sum():3d}): "
+            f"similarity mean={bin_sims.mean():.4f} | AUC={auc:.3f} | Wasserstein={wdist:.4f}"
+        )
+        bin_results.append(
+            {
+                "displacement_min": float(bin_disp.min()),
+                "displacement_max": float(bin_disp.max()),
+                "displacement_mean": float(bin_disp.mean()),
+                "n": int(mask.sum()),
+                "similarity_mean": float(bin_sims.mean()),
+                "auc_vs_positive": auc,
+                "wasserstein_distance_vs_positive": wdist,
+            }
+        )
+    results["displacement_bins"] = bin_results
 
     log_dir = REPO_ROOT / "research/logs"
     log_dir.mkdir(parents=True, exist_ok=True)

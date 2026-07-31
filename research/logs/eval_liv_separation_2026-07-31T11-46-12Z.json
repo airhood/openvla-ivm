@@ -1,0 +1,115 @@
+{
+  "timestamp": "2026-07-31T11-46-12Z",
+  "git_commit": "46d224bb31f42f3ecf3e65d352876d1103f78065",
+  "checkpoint": "/media/airhood/로컬 디스크/git/openvla-ivm/research/train_liv_out/liv_checkpoint.pt",
+  "checkpoint_train_args": {
+    "cache_manifest": [
+      "research/data_generation/liv_cache_out_spatial/cache_manifest.jsonl",
+      "research/data_generation/liv_cache_out_object/cache_manifest.jsonl"
+    ],
+    "output_dir": "research/train_liv_out",
+    "epochs": 30,
+    "batch_size": 16,
+    "lr": 0.001,
+    "weight_decay": 0.01,
+    "warmup_steps": 20,
+    "grad_clip": 1.0,
+    "temperature": 0.07,
+    "lambda_l2b": 1.0,
+    "n_extract_layers": 4,
+    "pool_size": 8,
+    "liv_dim": 128,
+    "max_hard_negatives": 3,
+    "val_frac": 0.1,
+    "seed": 0,
+    "device": "cuda",
+    "log_file": null
+  },
+  "results": {
+    "positive": {
+      "n": 743,
+      "mean": 0.9578652979547853,
+      "std": 0.02921831003461494
+    },
+    "translate": {
+      "n": 743,
+      "mean": 0.34529332446829386,
+      "std": 0.290726107941093,
+      "auc_vs_positive": 0.996185121248295
+    },
+    "rotate": {
+      "n": 214,
+      "mean": 0.39755114911245965,
+      "std": 0.31838918778215825,
+      "auc_vs_positive": 0.9424158186689475
+    },
+    "remove": {
+      "n": 532,
+      "mean": 0.17039826518463852,
+      "std": 0.3397032387543571,
+      "auc_vs_positive": 0.9986262763233791
+    },
+    "overall_auc_positive_vs_hard_negative": 0.9893295562704336,
+    "displacement_vs_similarity_spearman": {
+      "n": 1489,
+      "corr": -0.25124292999397296,
+      "pvalue": 7.200859422569043e-23
+    },
+    "displacement_bins": [
+      {
+        "displacement_min": 0.11313708498984758,
+        "displacement_max": 0.11313708498984762,
+        "displacement_mean": 0.11313708498984762,
+        "n": 197,
+        "similarity_mean": 0.3985336914393805,
+        "auc_vs_positive": 0.9906880461293562,
+        "wasserstein_distance_vs_positive": 0.5593316065154048
+      },
+      {
+        "displacement_min": 0.11313708498984763,
+        "displacement_max": 0.13447166211282705,
+        "displacement_mean": 0.12295325394631294,
+        "n": 176,
+        "similarity_mean": 0.3962215547534553,
+        "auc_vs_positive": 0.9985241037562707,
+        "wasserstein_distance_vs_positive": 0.5616437432013299
+      },
+      {
+        "displacement_min": 0.13492640710527812,
+        "displacement_max": 0.15644770875395891,
+        "displacement_mean": 0.1450851162475377,
+        "n": 186,
+        "similarity_mean": 0.3184824273370767,
+        "auc_vs_positive": 0.9961721587866684,
+        "wasserstein_distance_vs_positive": 0.6393828706177086
+      },
+      {
+        "displacement_min": 0.15647603785687006,
+        "displacement_max": 0.43788456650114266,
+        "displacement_mean": 0.1739170571927805,
+        "n": 186,
+        "similarity_mean": 0.27017867605211915,
+        "auc_vs_positive": 0.9998408081158917,
+        "wasserstein_distance_vs_positive": 0.6876866219026662
+      },
+      {
+        "displacement_min": 0.4379593466872442,
+        "displacement_max": 0.5419919476067333,
+        "displacement_mean": 0.48968449098604455,
+        "n": 186,
+        "similarity_mean": 0.41020874858343154,
+        "auc_vs_positive": 0.9489790011432871,
+        "wasserstein_distance_vs_positive": 0.5477652504808104
+      },
+      {
+        "displacement_min": 0.5420973025759983,
+        "displacement_max": 1.0,
+        "displacement_mean": 0.9790787302733127,
+        "n": 558,
+        "similarity_mean": 0.17606602105942945,
+        "auc_vs_positive": 0.9936154406479593,
+        "wasserstein_distance_vs_positive": 0.7817992768953558
+      }
+    ]
+  }
+}
