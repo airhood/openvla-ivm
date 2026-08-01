@@ -25,6 +25,7 @@ import argparse
 import json
 import subprocess
 import sys
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -115,7 +116,9 @@ def main():
             return liv_module.forward_from_submatrix(sub, vis).squeeze(0).cpu().numpy()
 
     pos_sims = []
+    pos_sims_by_suite = defaultdict(list)
     neg_sims_by_kind = {"translate": [], "rotate": [], "remove": []}
+    neg_sims_by_kind_suite = defaultdict(list)  # (kind, task_suite_name) -> [sim, ...]
     displacement_vs_sim = []  # (physical displacement, cosine similarity) — 전체 hard negative 대상
     # kind별 "자기 고유 단위"의 변위 — translate는 위치(m)만, rotate는 각도(deg)만 움직이므로
     # combined_disp처럼 섞지 않고 각자의 진짜 물리량으로 따로 봄(2026-08-01, kind 혼합이 구간별
@@ -125,7 +128,9 @@ def main():
     for sample in dataset.samples:
         anchor_emb = embed(sample["anchor"])
         positive_emb = embed(sample["positive"])
-        pos_sims.append(float(np.dot(anchor_emb, positive_emb)))
+        p_sim = float(np.dot(anchor_emb, positive_emb))
+        pos_sims.append(p_sim)
+        pos_sims_by_suite[sample["anchor"].get("task_suite_name", "unknown")].append(p_sim)
 
         anchor_pos = np.array(sample["anchor"]["object_pos"])
         anchor_quat = np.array(sample["anchor"]["object_quat"])
@@ -136,6 +141,7 @@ def main():
             sim = float(np.dot(anchor_emb, hn_emb))
             if kind in neg_sims_by_kind:
                 neg_sims_by_kind[kind].append(sim)
+            neg_sims_by_kind_suite[(kind, hn.get("task_suite_name", "unknown"))].append(sim)
 
             pos_disp = float(np.linalg.norm(np.array(hn["object_pos"]) - anchor_pos))
             angle_disp = quaternion_angle_deg(np.array(hn["object_quat"]), anchor_quat)
@@ -169,6 +175,28 @@ def main():
     overall_auc = auc_separation(pos_sims, all_neg_sims)
     print(f"\n[전체] positive vs all-hard-negative AUC={overall_auc:.3f}")
     results["overall_auc_positive_vs_hard_negative"] = overall_auc
+
+    # === kind x task_suite 분해 — 대칭 물체(libero_spatial) vs 비대칭(libero_object)에서
+    # rotate가 다르게 동작하는지 확인 (2026-08-01, 전체 rotate AUC가 0.5 밑으로 나온 원인 조사) ===
+    print("\nkind x task_suite별 분리도 (같은 suite의 positive 분포와 비교):")
+    kind_suite_results = {}
+    for (kind, suite), sims in sorted(neg_sims_by_kind_suite.items()):
+        suite_pos = np.array(pos_sims_by_suite.get(suite, []))
+        if len(sims) < 5 or len(suite_pos) < 5:
+            continue
+        sims = np.array(sims)
+        auc = auc_separation(suite_pos, sims)
+        print(
+            f"  [{kind} / {suite}] n={len(sims):3d} (positive n={len(suite_pos)}) "
+            f"similarity mean={sims.mean():.4f} | AUC={auc:.3f}"
+        )
+        kind_suite_results[f"{kind}__{suite}"] = {
+            "n": len(sims),
+            "n_positive_same_suite": len(suite_pos),
+            "similarity_mean": float(sims.mean()),
+            "auc_vs_same_suite_positive": auc,
+        }
+    results["kind_x_task_suite"] = kind_suite_results
 
     disp = np.array([d for d, s in displacement_vs_sim])
     sim = np.array([s for d, s in displacement_vs_sim])
