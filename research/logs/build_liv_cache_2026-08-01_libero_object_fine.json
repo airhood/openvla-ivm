@@ -1,0 +1,20 @@
+{
+  "timestamp": "2026-08-01T08-04-21Z",
+  "git_commit": "b55fd6de34f56610f3b93e5ba2b0f4a43262c6e9",
+  "source_dataset_manifest": "/media/airhood/로컬 디스크/git/openvla-ivm/research/data_generation/dataset_out_object_fine/manifest.jsonl",
+  "cache_manifest": "/media/airhood/로컬 디스크/git/openvla-ivm/research/data_generation/liv_cache_out_object_fine/cache_manifest.jsonl",
+  "pretrained_checkpoint": "moojink/openvla-7b-oft-finetuned-libero-object",
+  "n_extract_layers_cached": 8,
+  "n_cached": 2000,
+  "submatrix_shape": [
+    8,
+    32,
+    256
+  ],
+  "vision_features_shape": [
+    256,
+    4096
+  ],
+  "nan_or_inf_samples": 0,
+  "note": "fine-tier perturbation (translate 1~5cm, rotate ~15도) - AUC 민감도 해상도 측정용"
+}
