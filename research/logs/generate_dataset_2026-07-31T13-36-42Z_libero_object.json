@@ -1,0 +1,24 @@
+{
+  "timestamp": "2026-07-31T13-36-42Z",
+  "git_commit": "b55fd6de34f56610f3b93e5ba2b0f4a43262c6e9",
+  "args": {
+    "task_suite_name": "libero_object",
+    "num_tasks": null,
+    "groups_per_task": 20,
+    "seed": 0,
+    "output_dir": "dataset_out_object_fine",
+    "no_diff_filter": true,
+    "no_domain_randomization": false,
+    "perturbation_tier": "fine"
+  },
+  "manifest_path": "/media/airhood/로컬 디스크/git/openvla-ivm/research/data_generation/dataset_out_object_fine/manifest.jsonl",
+  "total_rows": 2000,
+  "role_counts": {
+    "anchor": 400,
+    "positive": 400,
+    "hard_negative_translate": 400,
+    "hard_negative_rotate": 400,
+    "hard_negative_remove": 400
+  },
+  "skipped_groups": 0
+}
