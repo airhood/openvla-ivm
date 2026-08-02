@@ -205,3 +205,57 @@ def quaternion_multiply(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
             w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
         ]
     )
+
+
+def get_scene_object_names(env) -> list:
+    """씬에 있는 모든 물체 이름을 반환한다 (obj_of_interest보다 넓음 — task 무관, replace 후보 선정용).
+
+    LIBERO의 ControlEnv가 감싸고 있는 raw robosuite env(`env.env`)의 `objects_dict`에서 얻는다.
+    """
+    return list(env.env.objects_dict.keys())
+
+
+def apply_object_replacement(env, target_object_name: str, anchor_pos: np.ndarray, anchor_quat: np.ndarray, rng: np.random.Generator = None):
+    """Phase 2 IVM Gross tier "교체" — target 물체를 치우고 씬의 다른 물체를 그 자리로 옮긴다.
+
+    remove(자리가 통째로 빔, Phase 1에서 이미 AUC~0.99로 거의 완벽히 잡히는 "너무 쉬운" 케이스)와
+    달리 "뭔가 있긴 함"이라는 시각적 신호가 남아서 더 의미 있는 난이도로 기대됨(docs/MODEL.md
+    "Phase 2 데이터 파이프라인 설계 확정" 참고).
+
+    Args:
+        env: LIBERO/robosuite 환경
+        target_object_name: 교체 대상 물체 이름(anchor 기준 물체)
+        anchor_pos, anchor_quat: target의 anchor pose (교체 물체가 옮겨갈 자리)
+        rng: numpy Generator
+
+    Returns:
+        replacement_name: 실제로 옮겨진 물체 이름. 씬에 다른 물체가 없어서 교체 불가능하면 None
+        restore_fn: 인자 없이 호출하면 두 물체를 원래 상태로 되돌리는 함수. replacement_name이
+                    None이면 아무것도 안 하는 no-op 함수
+    """
+    rng = rng or np.random.default_rng()
+    candidates = [n for n in get_scene_object_names(env) if n != target_object_name]
+    if not candidates:
+        return None, lambda: None
+
+    replacement_name = candidates[rng.integers(len(candidates))]
+    replacement_joint = object_joint_name(replacement_name)
+    replacement_body = object_body_name(replacement_name)
+    target_joint = object_joint_name(target_object_name)
+
+    replacement_orig_pos, replacement_orig_quat = get_object_pose(env, replacement_body)
+    replacement_orig_quat = canonicalize_quaternion_np(replacement_orig_quat)
+
+    # target은 시야 밖으로 (remove와 동일한 방식)
+    target_away_pos = np.asarray(anchor_pos, dtype=float).copy()
+    target_away_pos[2] -= 1.0
+    set_object_pose(env, target_joint, target_away_pos, anchor_quat)
+
+    # replacement를 target의 원래 자리로
+    set_object_pose(env, replacement_joint, anchor_pos, anchor_quat)
+
+    def restore_fn():
+        set_object_pose(env, target_joint, anchor_pos, anchor_quat)
+        set_object_pose(env, replacement_joint, replacement_orig_pos, replacement_orig_quat)
+
+    return replacement_name, restore_fn
