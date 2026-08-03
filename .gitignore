@@ -19,11 +19,18 @@ research/data_generation/smoke_out/
 research/data_generation/scene_utils_out/
 
 # research/data_generation/generate_dataset.py and build_liv_cache.py outputs
-# (일반화된 패턴 — 커스텀 --output_dir 이름을 쓰는 진단 실행도 잡히도록: *_out/, *_diag/)
+# (일반화된 패턴 — 커스텀 --output_dir 이름을 쓰는 진단/테스트 실행도 잡히도록: *_out/, *_diag/,
+# *_test*/, ivm_rollout_out/)
 research/data_generation/dataset_out*/
 research/data_generation/liv_cache_out*/
+research/data_generation/ivm_rollout_out*/
 research/data_generation/*_out/
 research/data_generation/*_diag/
+research/data_generation/*test*/
+
+# 브라우저 다운로드 임시 파일 (Colab에서 큰 zip 받다가 남는 것들)
+*.crdownload
+*.part
 research/data_generation/*.zip
 
 # research/train_liv.py output (checkpoints)
