@@ -721,6 +721,7 @@ def get_vla_action(
     proprio_projector: Optional[torch.nn.Module] = None,
     noisy_action_projector: Optional[torch.nn.Module] = None,
     use_film: bool = False,
+    liv_module: Any = None,
 ) -> List[np.ndarray]:
     """
     Generate action predictions with the VLA policy.
@@ -735,6 +736,9 @@ def get_vla_action(
         proprio_projector: Optional proprioception projector
         noisy_action_projector: Optional noisy action projector for diffusion
         use_film: Whether to use FiLM
+        liv_module: Optional (frozen, eval-mode) LIVModule — Phase 2 rollout 데이터 생성용. 주어지면
+            predict_action()가 output_attentions를 강제하고 결과를 `vla.last_liv`에 stash함(기존
+            predict_action() 시그니처와 동일 패턴, research/verify_liv_wiring.py 참고)
 
     Returns:
         List[np.ndarray]: Predicted actions
@@ -779,7 +783,9 @@ def get_vla_action(
         # Generate action
         if action_head is None:
             # Standard VLA output (single-image inputs, discrete actions)
-            action, _ = vla.predict_action(**inputs, unnorm_key=cfg.unnorm_key, do_sample=False)
+            action, _ = vla.predict_action(
+                **inputs, unnorm_key=cfg.unnorm_key, do_sample=False, liv_module=liv_module
+            )
         else:
             # Custom action head for continuous actions
             action, _ = vla.predict_action(
@@ -791,6 +797,7 @@ def get_vla_action(
                 noisy_action_projector=noisy_action_projector,
                 action_head=action_head,
                 use_film=use_film,
+                liv_module=liv_module,
             )
 
     # Return action chunk as list of actions

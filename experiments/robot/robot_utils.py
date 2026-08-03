@@ -106,6 +106,7 @@ def get_action(
     proprio_projector: Optional[torch.nn.Module] = None,
     noisy_action_projector: Optional[torch.nn.Module] = None,
     use_film: bool = False,
+    liv_module: Any = None,
 ) -> Union[List[np.ndarray], np.ndarray]:
     """
     Query the model to get action predictions.
@@ -120,6 +121,8 @@ def get_action(
         proprio_projector: Optional proprioception projector
         noisy_action_projector: Optional noisy action projector for diffusion
         use_film: Whether to use FiLM
+        liv_module: Optional (frozen) LIVModule — 주어지면 예측 후 vla.last_liv에 ℓ이 stash됨
+                    (openvla_utils.get_vla_action() 참고, Phase 2 rollout 데이터 생성용)
 
     Returns:
         Union[List[np.ndarray], np.ndarray]: Predicted actions
@@ -139,6 +142,7 @@ def get_action(
                 proprio_projector=proprio_projector,
                 noisy_action_projector=noisy_action_projector,
                 use_film=use_film,
+                liv_module=liv_module,
             )
         else:
             raise ValueError(f"Unsupported model family: {cfg.model_family}")
