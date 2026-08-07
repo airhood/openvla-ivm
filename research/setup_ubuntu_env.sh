@@ -1,7 +1,14 @@
 #!/bin/bash
 # research/setup_ubuntu_env.sh
 #
-# Ubuntu(로컬)에서 robosuite/LIBERO 데이터 생성 파이프라인을 돌리기 위한 venv 설정.
+# Ubuntu(로컬/서버)에서 robosuite/LIBERO 데이터 생성 파이프라인을 돌리기 위한 conda 환경 설정.
+#
+# conda 사용 이유(2026-08-08 venv에서 전환): 원본 openvla, 그리고 우리가 fork한
+# moojink/openvla-oft의 SETUP.md가 전부 conda 기반이라(`conda create -n ... python=3.10 -y` ->
+# `conda activate` -> 이후 pip install) 선행 연구 계보와 통일하기 위함. 단, conda는 "격리된
+# 파이썬 인터프리터 만들기" 용도로만 쓰고, 실제 패키지 설치는 원본과 동일하게 전부 pip로 한다
+# (conda install/conda-forge 채널은 안 씀) — 그래서 아래 pip 레벨 버전 고정들은 venv 시절과
+# 전부 동일하게 유지됨.
 #
 # 배경: Colab 컨테이너에 NVIDIA용 EGL 렌더링 드라이버(vendor ICD)가 없어서(Mesa만 있음),
 # robosuite가 하드코딩해서 쓰는 EGL offscreen 렌더링이 계속 세그폴트로 죽었다. 렌더링
@@ -13,24 +20,26 @@
 #   bash research/setup_ubuntu_env.sh
 #
 # 완료 후:
-#   source venv/bin/activate
+#   conda activate openvla-ivm
 #   echo "N" | python research/data_generation/smoke_test.py --task_suite_name libero_spatial --task_id 0
 #   ("N"은 LIBERO가 최초 실행 시 물어보는 커스텀 데이터셋 경로 질문에 대한 자동 응답)
 
 set -e
 
-PYTHON_BIN=${PYTHON_BIN:-python3.12}
+CONDA_ENV_NAME=${CONDA_ENV_NAME:-openvla-ivm}
+PYTHON_VERSION=${PYTHON_VERSION:-3.12}
 
-if ! command -v "$PYTHON_BIN" &> /dev/null; then
-    echo "오류: $PYTHON_BIN 을 찾을 수 없음."
-    echo "설치: sudo apt-get install python3.12 python3.12-venv"
-    echo "(다른 Python 버전을 쓰려면 PYTHON_BIN=python3.11 bash research/setup_ubuntu_env.sh 처럼 지정)"
+if ! command -v conda &> /dev/null; then
+    echo "오류: conda를 찾을 수 없음."
+    echo "설치: https://docs.conda.io/en/latest/miniconda.html (Miniconda로 충분)"
     exit 1
 fi
 
-echo "=== 1. venv 생성 ==="
-"$PYTHON_BIN" -m venv venv
-source venv/bin/activate
+echo "=== 1. conda 환경 생성 (${CONDA_ENV_NAME}, python ${PYTHON_VERSION}) ==="
+# `conda activate`를 스크립트(비대화형 쉘) 안에서 쓰려면 conda의 쉘 훅을 먼저 로드해야 함.
+eval "$(conda shell.bash hook)"
+conda create -n "$CONDA_ENV_NAME" python="$PYTHON_VERSION" -y
+conda activate "$CONDA_ENV_NAME"
 pip install --upgrade pip
 
 echo "=== 2. torch 설치 ==="
@@ -39,7 +48,7 @@ echo "=== 2. torch 설치 ==="
 pip install torch torchvision torchaudio
 
 echo "=== 3. cmake 설치 (sentencepiece 등 일부 패키지가 소스 빌드 시 필요) ==="
-# sudo 불필요 — PyPI의 cmake 바이너리 패키지를 venv 안에 설치.
+# sudo 불필요 — PyPI의 cmake 바이너리 패키지를 conda 환경 안에 설치.
 pip install cmake
 
 echo "=== 4. openvla-ivm 패키지 설치 ==="
@@ -76,7 +85,7 @@ pip install "mujoco==3.0.0"
 
 echo ""
 echo "=== 설치 완료 ==="
-echo "확인 (venv 활성화된 상태에서):"
+echo "확인 (conda 환경 활성화된 상태에서):"
 echo '  echo "N" | python research/data_generation/smoke_test.py --task_suite_name libero_spatial --task_id 0'
 echo ""
 echo "그래도 렌더링 관련 에러가 나면 (헤드리스/SSH 세션 등): MUJOCO_GL=egl 또는 osmesa 시도."
